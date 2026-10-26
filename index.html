@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NerdHex</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,5 93,27 93,73 50,95 7,73 7,27' fill='%23c061ff'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#0b0d12; --panel:#161a24; --panel2:#1f2533; --text:#e8ecf4; --muted:#8b94a8; --accent:#c061ff; --blue:#4da3ff; --teal:#5ad8c8; --ok:#6fdc6f; --bad:#ff5c5c; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; overflow:hidden; }
+  button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid #2c3446; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+  button:hover { background:#28304a; }
+  button:disabled { opacity:.45; cursor:default; }
+  button.primary { background: var(--accent); border-color: transparent; color:#fff; font-weight:600; }
+  button.primary:hover { filter: brightness(1.1); }
+  input { font: inherit; color: var(--text); background:#0f1219; border:1px solid #2c3446; border-radius:6px; padding:8px 10px; }
+  input.code { text-transform: uppercase; letter-spacing: .4em; font-size: 28px; width: 190px; text-align:center; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .screen { position:absolute; inset:0; display:none; }
+  .screen.active { display:block; }
+  /* ---- Lobby ---- */
+  #lobby { display:none; align-items:center; justify-content:center; background: radial-gradient(ellipse at 50% 30%, #1b1430 0%, var(--bg) 60%); }
+  #lobby.active { display:flex; }
+  .card { background: var(--panel); border:1px solid #262c3b; border-radius:14px; padding:28px 32px; width: 520px; max-width: 94vw; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  h1 { margin:0 0 4px; font-size:34px; letter-spacing:.02em; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); margin-bottom: 22px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin: 10px 0; }
+  .roles { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin: 14px 0; }
+  .role { border:2px solid #2c3446; border-radius:10px; padding:12px; cursor:pointer; background:#121620; min-height: 92px; }
+  .role h3 { margin:0 0 4px; font-size:15px; }
+  .role p { margin:0; color: var(--muted); font-size:12px; }
+  .role.taken { cursor: default; }
+  .role.mine { outline: 2px solid #fff; }
+  .role[data-role="0"] { border-color: var(--accent); } .role[data-role="1"] { border-color: var(--blue); } .role[data-role="2"] { border-color: var(--teal); }
+  .bigcode { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 44px; letter-spacing: .35em; background:#0f1219; padding: 8px 18px; border-radius: 10px; border:1px dashed #3a4356; }
+  .players { margin: 8px 0; color: var(--muted); font-size: 14px; }
+  .players b { color: var(--text); }
+  .err { color: var(--bad); min-height: 1.2em; font-size: 14px; }
+  details { margin-top: 16px; color: var(--muted); font-size: 13px; }
+  details summary { cursor:pointer; color: var(--text); }
+  details p { margin: 6px 0; }
+  /* ---- Game ---- */
+  #game canvas#view { position:absolute; inset:0; width:100%; height:100%; display:block; cursor: crosshair; }
+  #top { position:absolute; top:0; left:0; right:0; height:40px; display:flex; align-items:center; gap:18px; padding:0 14px; background: rgba(10,12,18,.85); border-bottom:1px solid #222838; font-size:14px; pointer-events:none; }
+  #top .res { display:flex; gap:14px; }
+  #top .res span b { font-weight:600; }
+  #top .clock { margin-left:auto; color: var(--muted); }
+  #top .plist { display:flex; gap:10px; font-size:12px; }
+  #top .plist span { padding:2px 8px; border-radius:10px; background:#1f2533; }
+  #top .plist span.dead { text-decoration: line-through; opacity:.5; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
+  #bottom { position:absolute; left:0; right:0; bottom:0; height:190px; display:flex; gap:10px; padding:10px; background: rgba(10,12,18,.88); border-top:1px solid #222838; }
+  #selpanel { flex: 1 1 auto; background: var(--panel); border-radius:10px; padding:10px 12px; overflow:auto; min-width: 280px; }
+  #selpanel h3 { margin:0 0 6px; font-size:15px; }
+  #selpanel .desc { color: var(--muted); font-size:12px; margin-bottom:8px; }
+  .actions { display:flex; flex-wrap:wrap; gap:6px; }
+  .actions button { padding:6px 10px; font-size:13px; position:relative; }
+  .actions button.on { outline:2px solid var(--ok); }
+  .actions button small { display:block; color: var(--muted); font-size:11px; }
+  .actions button .key { position:absolute; top:2px; right:5px; font-size:10px; color: var(--muted); }
+  #buildpanel { flex: 0 0 360px; background: var(--panel); border-radius:10px; padding:10px 12px; overflow:auto; }
+  #buildpanel h3 { margin:0 0 6px; font-size:13px; color: var(--muted); text-transform: uppercase; letter-spacing:.08em; }
+  #minimapwrap { flex: 0 0 170px; background: var(--panel); border-radius:10px; padding:5px; }
+  #minimap { width:160px; height:160px; display:block; border-radius:6px; cursor:pointer; }
+  #log { position:absolute; left:14px; bottom:200px; width: 420px; pointer-events:none; font-size:13px; display:flex; flex-direction:column; gap:3px; }
+  #log div { background: rgba(10,12,18,.75); padding:4px 8px; border-radius:6px; border-left:3px solid var(--accent); animation: fade 8s forwards; }
+  @keyframes fade { 0%,75% { opacity:1 } 100% { opacity:0 } }
+  #hint { position:absolute; top:48px; left:14px; color: var(--muted); font-size:12px; pointer-events:none; }
+  #research { position:absolute; right:14px; top:48px; background: rgba(22,26,36,.9); border-radius:10px; padding:8px 10px; font-size:12px; max-width: 260px; }
+  #research h4 { margin:0 0 6px; font-size:12px; color: var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+  #research .actions button { font-size:12px; padding:5px 8px; }
+  #endscreen { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background: rgba(0,0,0,.65); }
+  #endscreen.show { display:flex; }
+  #endscreen .card { text-align:center; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:8px; font-size:12px; background:#1f2533; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div id="lobby" class="screen active">
+  <div class="card">
+    <h1>Nerd<span>Hex</span></h1>
+    <div class="sub">One Swarm against two Colonies on a hex battlefield. Browser-based, peer-to-peer, no accounts.</div>
+
+    <div id="lobby-home">
+      <div class="row"><label>Your name</label><input id="name" maxlength="16" placeholder="Commander" style="flex:1"></div>
+      <div class="row">
+        <button class="primary" id="btn-host">Host a match</button>
+        <span style="color:var(--muted)">or join with a code</span>
+        <input id="code" class="code" maxlength="4" placeholder="ABCD">
+        <button id="btn-join">Join</button>
+      </div>
+      <div class="err" id="home-err"></div>
+      <details>
+        <summary>How it works</summary>
+        <p>The host's browser runs the match and shares a 4-letter code. Two friends enter the code and pick a side. Three players are required: one Swarm, two Colonies.</p>
+        <p><b>Swarm</b> holds the central plateau: build Extractors on the mineral veins, hatch mobile Spawners on creep (they breed units for free and boost your income), and destroy both Command Hubs.</p>
+        <p><b>Colony</b> players each defend a corner base: train Troopers, keep Generators and Batteries up (lasers need energy), expand to geysers, research at a Tech Lab, and kill the Hive.</p>
+        <p>Every 4 minutes a Surge gives the Swarm more income and each Colony two free Troopers, so nobody can turtle forever. If a Colony player leaves, their ally inherits the base.</p>
+      </details>
+    </div>
+
+    <div id="lobby-room" style="display:none">
+      <div class="row" style="justify-content:space-between">
+        <div><div style="color:var(--muted);font-size:13px">Room code — share it with two friends</div><div class="bigcode" id="roomcode">----</div></div>
+        <div style="text-align:right"><div class="tag" id="connstate">connecting…</div></div>
+      </div>
+      <div class="roles" id="roles">
+        <div class="role" data-role="0"><h3>Swarm</h3><p>Solo. Central hive, free units, snowballing economy.</p><div class="who"></div></div>
+        <div class="role" data-role="1"><h3>Colony A</h3><p>Defender, east base. Lasers, energy, walls.</p><div class="who"></div></div>
+        <div class="role" data-role="2"><h3>Colony B</h3><p>Defender, west base. Lasers, energy, walls.</p><div class="who"></div></div>
+      </div>
+      <div class="players" id="playerlist"></div>
+      <div class="row">
+        <button class="primary" id="btn-start" disabled>Start match</button>
+        <button id="btn-leave">Leave</button>
+        <span class="err" id="room-err"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="game" class="screen">
+  <canvas id="view"></canvas>
+  <div id="top">
+    <div class="res" id="res"></div>
+    <div class="plist" id="plist"></div>
+    <div class="clock" id="clock">00:00</div>
+  </div>
+  <div id="hint">Left-drag: select · Right-click: move / attack · A + click: attack-move · S: stop · Arrows / middle-drag / minimap: pan · Wheel: zoom · H: home · Esc: cancel</div>
+  <div id="research"></div>
+  <div id="log"></div>
+  <div id="bottom">
+    <div id="selpanel"></div>
+    <div id="buildpanel"></div>
+    <div id="minimapwrap"><canvas id="minimap" width="160" height="160"></canvas></div>
+  </div>
+  <div id="endscreen"><div class="card"><h1 id="endtitle">Victory</h1><div class="sub" id="endsub"></div><button class="primary" onclick="location.reload()">Back to lobby</button></div></div>
+</div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
